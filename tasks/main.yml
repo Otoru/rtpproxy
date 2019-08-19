@@ -1,0 +1,78 @@
+---
+- name: Installing dependencies
+  import_tasks: deps/redhat.yml
+  when: ansible_os_family|lower == 'redhat'
+- import_tasks: deps/debian.yml
+  when: ansible_os_family|lower == 'debian'
+
+- name: Identifying the latest software release
+  uri:
+    url: https://api.github.com/repos/sippy/rtpproxy/releases/latest
+    return_content: yes
+  register: output
+
+- set_fact:
+    version={{ output.json.tag_name }}
+
+- debug: var=version
+
+- name: Creating user responsible for the service
+  user:
+   name: "rtpproxy"
+   shell: "/sbin/nologin"
+   force: true
+
+- name: Download RTPProxy Source Code
+  get_url:
+    url: https://github.com/sippy/rtpproxy/archive/{{ version }}.tar.gz
+    dest: /usr/src/rtpproxy.tar.gz
+    force: true
+
+- name: Creating Destination Folder
+  file:
+    path: /usr/src/rtpproxy/
+    state: directory
+
+- name: Unzipping package
+  unarchive:
+    src: /usr/src/rtpproxy.tar.gz
+    dest: /usr/src/rtpproxy/
+    remote_src: true
+    extra_opts:
+      - "--strip-components"
+      - "1"
+
+- name: Removing Compressed File
+  file:
+    path: /usr/src/rtpproxy.tar.gz
+    state: absent
+
+- name: Configuring library
+  command: ./configure
+  args:
+    chdir: "/usr/src/rtpproxy/"
+
+- name: Constructing application
+  make:
+    chdir: "/usr/src/rtpproxy/"
+
+- name: Installing application
+  make:
+    chdir: "/usr/src/rtpproxy/"
+    target: install
+
+- name: Creating startup service
+  copy:
+    src: "rtpproxy.init.sh"
+    dest: "/etc/init.d/rtpproxy"
+    mode: '0750'
+
+- name: Reloading Services
+  systemd:
+    daemon_reload: yes
+
+- name: Adding RTPProxy to Boot
+  service:
+    name: "rtpproxy"
+    state: restarted
+    enabled: yes

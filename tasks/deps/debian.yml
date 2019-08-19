@@ -1,0 +1,10 @@
+- name: Install packages
+  apt:
+    force_apt_get: yes
+    update_cache: yes
+    name: "{{ packages }}"
+    state: latest
+  vars:
+    packages:
+      - gcc
+      - make
